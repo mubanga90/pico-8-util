@@ -57,17 +57,22 @@ echo -e "${GREEN}Launching PICO-8...${NC}"
 eval $PICO8_APP "$@" &
 PICO8_PID=$!
 
-# Wait for PICO-8 to start
+# Wait for PICO-8 to start (give it a moment)
 echo "Waiting for PICO-8 to start..."
-while ! pgrep -x "pico8" > /dev/null; do
-    sleep 0.2
-done
-echo -e "${GREEN}PICO-8 is running${NC}"
+sleep 1
 
-# Wait for PICO-8 to exit
-while pgrep -x "pico8" > /dev/null; do
-    sleep 1
-done
+# Check if the PID is valid and still running
+if kill -0 $PICO8_PID 2>/dev/null; then
+    echo -e "${GREEN}PICO-8 is running (PID: $PICO8_PID)${NC}"
+    # Wait for PICO-8 to exit using the captured PID
+    wait $PICO8_PID 2>/dev/null
+else
+    echo -e "${YELLOW}Launcher exited, monitoring process by name...${NC}"
+    # Fallback for macOS that uses open to launch PICO-8
+    while pgrep -x "pico8" > /dev/null; do
+        sleep 1
+    done
+fi
 
 echo -e "${YELLOW}PICO-8 has exited${NC}"
 

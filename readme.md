@@ -27,8 +27,8 @@ Couple of scripts to make development on PICO-8 easier.
    to make the scripts executable.
 6. Add the scripts the scripts you want to use your shell aliases (in your `.bashrc` or `.zshrc` file), for example:
     ```bash
-    alias pico-8="pico-8-dev.sh"
-    alias pico-8-log="pico-8-log.sh"
+    alias pico-8="~/pico-8-utils/pico-8-dev.sh"
+    alias pico-8-log="~/pico-8-utils/pico-8-log.sh"
     ```
 ## pico-8-dev.sh
 
