@@ -1,0 +1,108 @@
+#!/bin/bash
+set -e
+
+# Load shared configuration
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/pico-8-config.sh"
+
+echo -e "${GREEN}Starting PicoCalc...${NC}"
+
+# Ensure we're in the carts directory
+cd "$CARTS_DIR" || { echo -e "${RED}Carts directory not found!${NC}"; exit 1; }
+
+# Check if we're in a git repository
+if [ -d .git ]; then
+    echo -e "${YELLOW}Checking git status...${NC}"
+    
+    # Fetch latest changes
+    git fetch origin
+    
+    # Check if we're behind
+    LOCAL=$(git rev-parse @)
+    REMOTE=$(git rev-parse @{u} 2>/dev/null || echo "")
+    BASE=$(git merge-base @ @{u} 2>/dev/null || echo "")
+    
+    if [ -n "$REMOTE" ]; then
+        if [ "$LOCAL" = "$REMOTE" ]; then
+            echo -e "${GREEN}Already up to date with origin${NC}"
+        elif [ "$LOCAL" = "$BASE" ]; then
+            echo -e "${YELLOW}Pulling latest changes...${NC}"
+            git pull
+        elif [ "$REMOTE" = "$BASE" ]; then
+            echo -e "${YELLOW}Local changes detected, will sync after PICO-8 exits${NC}"
+        else
+            echo -e "${RED}WARNING: Diverged from origin. Manual merge may be needed.${NC}"
+        fi
+    fi
+fi
+
+# Create log directory if it doesn't exist
+mkdir -p "$(dirname "$LOG_FILE")"
+
+# Initialize log file
+echo "PICO-8 log - $(date)" > "$LOG_FILE"
+
+# Start log monitoring in background
+tail -f "$LOG_FILE" &
+TAIL_PID=$!
+
+# Cleanup function
+cleanup() {
+    kill "$TAIL_PID" 2>/dev/null || true
+}
+trap cleanup EXIT INT TERM
+
+# Start PICO-8
+echo -e "${GREEN}Launching PICO-8...${NC}"
+eval $PICO8_APP "$@" &
+PICO8_PID=$!
+
+# Wait for PICO-8 to start
+echo "Waiting for PICO-8 to start..."
+while ! pgrep -x "pico8" > /dev/null; do
+    sleep 0.2
+done
+echo -e "${GREEN}PICO-8 is running${NC}"
+
+# Wait for PICO-8 to exit
+while pgrep -x "pico8" > /dev/null; do
+    sleep 1
+done
+
+echo -e "${YELLOW}PICO-8 has exited${NC}"
+
+# Git commit and push if there are changes
+if [ -d .git ]; then
+    if [ -n "$(git status --porcelain)" ]; then
+        echo -e "${YELLOW}Changes detected, git status:${NC}"
+        git add -A
+        git status
+        
+        echo -e "Comitting and pushing"
+        # Auto-generate commit message with timestamp
+        COMMIT_MSG="Auto-save from PicoCalc - $(date '+%Y-%m-%d %H:%M:%S')"
+        
+        read -p "Enter commit message (or press Enter for auto, press r to reset the changes or press q to quit): " USER_MSG
+        if [ "$USER_MSG" = "r" ]; then
+            git reset --hard
+            echo -e "${GREEN}Changes reset successfully${NC}"
+            exit 0
+        elif [ "$USER_MSG" = "q" ]; then
+            echo -e "${RED}Quitting...${NC}"
+            exit 0
+        fi
+        [ -n "$USER_MSG" ] && COMMIT_MSG="$USER_MSG"
+        
+        git commit -m "$COMMIT_MSG"
+        
+        if git push; then
+            echo -e "${GREEN}Changes pushed successfully${NC}"
+        else
+            echo -e "${RED}Failed to push changes. Check your connection and credentials.${NC}"
+        fi
+    else
+        echo -e "${GREEN}No changes detected${NC}"
+    fi
+fi
+
+echo -e "${GREEN}PICO-8 session ended${NC}"
