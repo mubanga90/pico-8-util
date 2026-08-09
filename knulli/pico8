@@ -1,0 +1,62 @@
+#!/bin/sh
+
+# PICO-8 sync wrapper for KNULLI (Anbernic RG35xx and friends).
+#
+# Installed as /userdata/bios/pico-8/pico8 with the real binary renamed to
+# pico8.real, so every launch (Splore or a single cart) first pulls the
+# latest carts from GitHub, then starts PICO-8. KNULLI ships no git, so
+# this downloads a snapshot tarball over HTTPS instead of doing a git pull.
+#
+# Offline? The download times out after a few seconds and PICO-8 launches
+# with the carts already on the device.
+#
+# Sync is one-way (GitHub -> device) and additive: carts deleted from the
+# repo are not deleted from the device.
+
+REPO="mubanga90/pico-8-carts"
+BRANCH="main"
+CARTS_DIR="/userdata/roms/pico8"
+# Fine-grained GitHub token with read-only Contents access to $REPO
+# (required while the repo is private; delete the file if it goes public)
+TOKEN_FILE="/userdata/system/pico8-github-token"
+REAL_PICO8="/userdata/bios/pico-8/pico8.real"
+
+sync_carts() {
+    tmpdir=$(mktemp -d) || return 0
+
+    AUTH=""
+    [ -r "$TOKEN_FILE" ] && AUTH="Authorization: Bearer $(cat "$TOKEN_FILE")"
+
+    curl -fsSL --connect-timeout 5 --max-time 120 ${AUTH:+-H "$AUTH"} \
+        "https://api.github.com/repos/$REPO/tarball/$BRANCH" \
+        -o "$tmpdir/carts.tar.gz"
+
+    if [ ! -s "$tmpdir/carts.tar.gz" ]; then
+        echo "pico8-sync: offline or download failed - playing local carts"
+        rm -rf "$tmpdir"
+        return 0
+    fi
+
+    mkdir -p "$tmpdir/extract"
+    if ! tar -xzf "$tmpdir/carts.tar.gz" -C "$tmpdir/extract"; then
+        echo "pico8-sync: could not extract tarball - playing local carts"
+        rm -rf "$tmpdir"
+        return 0
+    fi
+
+    # The tarball contains a single "<owner>-<repo>-<sha>" directory
+    src=$(find "$tmpdir/extract" -mindepth 1 -maxdepth 1 -type d | head -n 1)
+    if [ -n "$src" ]; then
+        mkdir -p "$CARTS_DIR"
+        rsync -a "$src"/ "$CARTS_DIR"/
+        echo "pico8-sync: carts updated from $REPO@$BRANCH"
+    fi
+    rm -rf "$tmpdir"
+}
+
+sync_carts
+
+# printh log target used by the dev workflow; gitignored, so never in the tarball
+mkdir -p "$CARTS_DIR/debug"
+
+exec "$REAL_PICO8" "$@"

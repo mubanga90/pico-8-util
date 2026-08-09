@@ -1,0 +1,26 @@
+#!/bin/bash
+
+# PICO-8 Configuration - template
+#
+# Copy this file to pico-8-config.sh and adjust it for this machine:
+#   cp pico-8-config.sh.example pico-8-config.sh
+# pico-8-config.sh is gitignored, so every device keeps its own paths.
+#
+# CARTS_DIR must match root_path in PICO-8's own config.txt,
+# otherwise the git sync silently does nothing.
+
+# macOS defaults:
+PICO8_APP="open /Applications/PICO-8.app"
+CARTS_DIR="$HOME/Library/Application Support/pico-8/carts/"
+LOG_FILE="$CARTS_DIR/debug/log.txt"
+
+# Linux (e.g. Raspberry Pi / PicoCalc) defaults:
+#PICO8_APP="pico8"
+#CARTS_DIR="$HOME/.lexaloffle/pico-8/carts"
+#LOG_FILE="$CARTS_DIR/debug/log.txt"
+
+# Colors for output
+GREEN='\033[1;92m'
+YELLOW='\033[1;93m'
+RED='\033[1;91m'
+NC='\033[0m' # No Color

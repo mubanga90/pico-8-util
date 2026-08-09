@@ -1,8 +1,13 @@
 #!/bin/bash
 set -e
 
-# Load shared configuration
+# Load machine-local configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ ! -f "$SCRIPT_DIR/pico-8-config.sh" ]; then
+    echo "No pico-8-config.sh found. Create this machine's config first:"
+    echo "  cp \"$SCRIPT_DIR/pico-8-config.sh.example\" \"$SCRIPT_DIR/pico-8-config.sh\""
+    exit 1
+fi
 source "$SCRIPT_DIR/pico-8-config.sh"
 
 echo -e "${GREEN}Starting PicoCalc...${NC}"
@@ -13,6 +18,14 @@ cd "$CARTS_DIR" || { echo -e "${RED}Carts directory not found!${NC}"; exit 1; }
 # Check if we're in a git repository
 if [ -d .git ]; then
     echo -e "${YELLOW}Checking git status...${NC}"
+
+    # Recover from interrupted writes (hard power-off): empty object files
+    # are corrupt beyond repair - remove them so fetch can restore them
+    EMPTY_OBJS=$(find .git/objects -type f -empty 2>/dev/null | wc -l | tr -d ' ')
+    if [ "$EMPTY_OBJS" -gt 0 ]; then
+        echo -e "${YELLOW}Found $EMPTY_OBJS corrupt (empty) git object(s) - removing so they can be re-fetched${NC}"
+        find .git/objects -type f -empty -delete
+    fi
 
     if ! git remote get-url origin >/dev/null 2>&1; then
         echo -e "${YELLOW}No 'origin' remote configured - skipping sync${NC}"
@@ -42,7 +55,7 @@ if [ -d .git ]; then
             fi
         fi
     else
-        echo -e "${YELLOW}No internet connection - skipping sync, playing local versions${NC}"
+        echo -e "${YELLOW}Could not sync with origin (offline or repo problem) - playing local versions${NC}"
     fi
 fi
 

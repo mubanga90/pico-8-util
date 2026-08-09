@@ -5,7 +5,11 @@ Couple of scripts to make development on PICO-8 easier.
 ## Common Setup
 
 1. Clone this repository
-2. Configure the correct paths in `pico-8-config.sh`
+2. Create this machine's config from the template (`pico-8-config.sh` is gitignored, so every device keeps its own paths and a `git pull` never overrides them):
+   ```bash
+   cp pico-8-config.sh.example pico-8-config.sh
+   ```
+   Then adjust the paths in `pico-8-config.sh`. `CARTS_DIR` must match `root_path` in PICO-8's own `config.txt`, otherwise the git sync silently does nothing.
    - Default for macOS: 
    ```bash
    PICO8_APP="open /Applications/PICO-8.app"
@@ -22,7 +26,7 @@ Couple of scripts to make development on PICO-8 easier.
 4. Create `debug/log.txt` file in your cart directory, and add it to .gitignore
 5. Run 
     ```bash
-    chmod +x pico-8-config.sh pico-8-dev.sh pico-8-play.sh pico-8-log.sh
+    chmod +x pico-8-dev.sh pico-8-play.sh pico-8-log.sh
    ```
    to make the scripts executable.
 6. Add the scripts the scripts you want to use your shell aliases (in your `.bashrc` or `.zshrc` file), for example:
@@ -66,3 +70,26 @@ A script to view the log file in a separate terminal (via ssh for example).
 
 1. Run `./pico-8-log.sh`
 2. The script will automatically start tailing the log file.
+
+## KNULLI handhelds (Anbernic RG35xx etc.)
+
+On KNULLI, PICO-8 is launched through EmulationStation, so instead of `pico-8-play.sh` the device gets a small wrapper around the native PICO-8 binary (`knulli/pico8`) that pulls the latest carts from GitHub before every launch. KNULLI ships no git, so the wrapper downloads a snapshot tarball over HTTPS instead of doing a `git pull`. Offline it times out after a few seconds and launches with the carts already on the device — same offline-friendly behaviour as the other scripts.
+
+The sync is one-way (GitHub → device) and additive: carts deleted from the repo are not deleted from the device.
+
+### Setup
+
+1. Install native PICO-8 on the device as described in the [KNULLI wiki](https://knulli.org/systems/pico-8/) (binaries in `/userdata/bios/pico-8/`).
+2. Check `REPO` and `BRANCH` at the top of `knulli/pico8`.
+3. If the carts repo is private, create a fine-grained GitHub personal access token with read-only **Contents** access to just that repo.
+4. With the device on wifi, run:
+    ```bash
+    ./knulli/install-to-knulli.sh
+    ```
+    Default target is `root@knulli.local` (pass `user@host` as argument to override), default SSH password is `linux`. Paste the token when prompted — it is stored on the device at `/userdata/system/pico8-github-token`.
+5. Launch Splore or any cart on the device — it syncs first, then starts.
+
+Notes:
+- The installer is safe to re-run; it renames the real binary to `pico8.real` once and just refreshes the wrapper afterwards.
+- A KNULLI update or reinstalling the PICO-8 binaries may overwrite the wrapper — just run the installer again.
+- Sync output lands in the emulator launch log (`/userdata/system/logs/`), useful if carts don't show up.
