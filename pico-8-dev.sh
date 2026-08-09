@@ -13,26 +13,30 @@ cd "$CARTS_DIR" || { echo -e "${RED}Carts directory not found!${NC}"; exit 1; }
 # Check if we're in a git repository
 if [ -d .git ]; then
     echo -e "${YELLOW}Checking git status...${NC}"
-    
-    # Fetch latest changes
-    git fetch origin
-    
-    # Check if we're behind
-    LOCAL=$(git rev-parse @)
-    REMOTE=$(git rev-parse @{u} 2>/dev/null || echo "")
-    BASE=$(git merge-base @ @{u} 2>/dev/null || echo "")
-    
-    if [ -n "$REMOTE" ]; then
-        if [ "$LOCAL" = "$REMOTE" ]; then
-            echo -e "${GREEN}Already up to date with origin${NC}"
-        elif [ "$LOCAL" = "$BASE" ]; then
-            echo -e "${YELLOW}Pulling latest changes...${NC}"
-            git pull
-        elif [ "$REMOTE" = "$BASE" ]; then
-            echo -e "${YELLOW}Local changes detected, will sync after PICO-8 exits${NC}"
-        else
-            echo -e "${RED}WARNING: Diverged from origin. Manual merge may be needed.${NC}"
+
+    if ! git remote get-url origin >/dev/null 2>&1; then
+        echo -e "${YELLOW}No 'origin' remote configured - skipping sync${NC}"
+    elif git fetch origin; then
+        # Check if we're behind
+        LOCAL=$(git rev-parse @)
+        REMOTE=$(git rev-parse @{u} 2>/dev/null || echo "")
+        BASE=$(git merge-base @ @{u} 2>/dev/null || echo "")
+
+        if [ -n "$REMOTE" ]; then
+            if [ "$LOCAL" = "$REMOTE" ]; then
+                echo -e "${GREEN}Already up to date with origin${NC}"
+            elif [ "$LOCAL" = "$BASE" ]; then
+                echo -e "${YELLOW}Pulling latest changes...${NC}"
+                git merge --ff-only @{u} || echo -e "${RED}Failed to apply remote changes - continuing with local version${NC}"
+            elif [ "$REMOTE" = "$BASE" ]; then
+                echo -e "${YELLOW}Unpushed local commits detected, pushing...${NC}"
+                git push || echo -e "${RED}Push failed - will retry after PICO-8 exits${NC}"
+            else
+                echo -e "${RED}WARNING: Diverged from origin. Manual merge may be needed.${NC}"
+            fi
         fi
+    else
+        echo -e "${YELLOW}No internet connection - skipping sync, changes will be committed locally${NC}"
     fi
 fi
 
@@ -82,11 +86,10 @@ if [ -d .git ]; then
         echo -e "${YELLOW}Changes detected, git status:${NC}"
         git add -A
         git status
-        
-        echo -e "Comitting and pushing"
+
         # Auto-generate commit message with timestamp
         COMMIT_MSG="Auto-save from PicoCalc - $(date '+%Y-%m-%d %H:%M:%S')"
-        
+
         read -p "Enter commit message (or press Enter for auto, press r to reset the changes or press q to quit): " USER_MSG
         if [ "$USER_MSG" = "r" ]; then
             git reset --hard
@@ -97,16 +100,23 @@ if [ -d .git ]; then
             exit 0
         fi
         [ -n "$USER_MSG" ] && COMMIT_MSG="$USER_MSG"
-        
+
         git commit -m "$COMMIT_MSG"
-        
-        if git push; then
-            echo -e "${GREEN}Changes pushed successfully${NC}"
-        else
-            echo -e "${RED}Failed to push changes. Check your connection and credentials.${NC}"
-        fi
     else
         echo -e "${GREEN}No changes detected${NC}"
+    fi
+
+    # Push anything unpushed - from this session or a previous offline one
+    if git rev-parse --abbrev-ref '@{u}' >/dev/null 2>&1; then
+        AHEAD=$(git rev-list --count '@{u}..@')
+        if [ "$AHEAD" -gt 0 ]; then
+            echo -e "${YELLOW}Pushing $AHEAD commit(s)...${NC}"
+            if git push; then
+                echo -e "${GREEN}Changes pushed successfully${NC}"
+            else
+                echo -e "${RED}Push failed (no internet?). Commits are saved locally and will be pushed on the next run.${NC}"
+            fi
+        fi
     fi
 fi
 

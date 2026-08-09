@@ -13,33 +13,36 @@ cd "$CARTS_DIR" || { echo -e "${RED}Carts directory not found!${NC}"; exit 1; }
 # Check if we're in a git repository
 if [ -d .git ]; then
     echo -e "${YELLOW}Checking git status...${NC}"
-    
-    # Fetch latest changes
-    git fetch origin
-    
-    # Check if we're behind
-    LOCAL=$(git rev-parse @)
-    REMOTE=$(git rev-parse @{u} 2>/dev/null || echo "")
-    BASE=$(git merge-base @ @{u} 2>/dev/null || echo "")
-    
-    if [ -n "$REMOTE" ]; then
-        if [ "$LOCAL" = "$REMOTE" ]; then
-            echo -e "${GREEN}Already up to date with origin${NC}"
-        elif [ "$LOCAL" = "$BASE" ]; then
-            echo -e "${YELLOW}Pulling latest changes...${NC}"
-            git pull
-        elif [ "$REMOTE" = "$BASE" ]; then
-            read -p "${RED}WARNING: Local changes detected! Do you want to reset and pull latest changes? (y/n)${NC}" USER_RESET
-            if [ "$USER_RESET" = "y" ]; then
-                git reset --hard
-                git pull
-                echo -e "${GREEN}Changes reset and pulled successfully${NC}"
+
+    if ! git remote get-url origin >/dev/null 2>&1; then
+        echo -e "${YELLOW}No 'origin' remote configured - skipping sync${NC}"
+    elif git fetch origin; then
+        # Check if we're behind
+        LOCAL=$(git rev-parse @)
+        REMOTE=$(git rev-parse @{u} 2>/dev/null || echo "")
+        BASE=$(git merge-base @ @{u} 2>/dev/null || echo "")
+
+        if [ -n "$REMOTE" ]; then
+            if [ "$LOCAL" = "$REMOTE" ]; then
+                echo -e "${GREEN}Already up to date with origin${NC}"
+            elif [ "$LOCAL" = "$BASE" ]; then
+                echo -e "${YELLOW}Pulling latest changes...${NC}"
+                git merge --ff-only @{u} || echo -e "${RED}Failed to apply remote changes - continuing with local version${NC}"
+            elif [ "$REMOTE" = "$BASE" ]; then
+                read -p "$(echo -e "${RED}WARNING: Local changes detected! Do you want to reset and pull latest changes? (y/n)${NC} ")" USER_RESET
+                if [ "$USER_RESET" = "y" ]; then
+                    git reset --hard
+                    git merge --ff-only @{u} 2>/dev/null || true
+                    echo -e "${GREEN}Changes reset and pulled successfully${NC}"
+                else
+                    echo -e "${RED}Changes not reset and pulled${NC}"
+                fi
             else
-                echo -e "${RED}Changes not reset and pulled${NC}"
+                echo -e "${RED}WARNING: Diverged from origin. Manual merge may be needed.${NC}"
             fi
-        else
-            echo -e "${RED}WARNING: Diverged from origin. Manual merge may be needed.${NC}"
         fi
+    else
+        echo -e "${YELLOW}No internet connection - skipping sync, playing local versions${NC}"
     fi
 fi
 
